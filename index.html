@@ -1,0 +1,298 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>QueryLens - NL2SQL Clarification Engine</title>
+  <meta name="description"
+    content="Intermediate processing layer and clarification engine for Natural Language to SQL generation on Online Retail dataset.">
+
+  <!-- CSS Styles -->
+  <link rel="stylesheet" href="styles.css">
+
+  <!-- Chart.js Library -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+</head>
+
+<body>
+
+  <!-- Top Navigation Header -->
+  <header class="navbar">
+    <div class="brand">
+      <div class="brand-icon">🔍</div>
+      <div>
+        <div class="brand-title">QueryLens</div>
+      </div>
+      <span class="brand-badge">NL2SQL Clarification Engine</span>
+    </div>
+
+    <div class="nav-actions">
+      <button id="btnOpenSchemaModal" class="btn-secondary">
+        <span>📖</span> Domain Schema
+      </button>
+    </div>
+  </header>
+
+  <!-- Main App Layout Container -->
+  <main class="app-container">
+
+    <!-- 4-Stage Workflow Progress Stepper (from Specification & Diagram) -->
+    <section class="workflow-stepper">
+      <div class="step-card active">
+        <div class="step-num">1</div>
+        <div class="step-info">
+          <div class="step-title">Stage 1: Ambiguous Question</div>
+          <div class="step-sub">Input Prompt Gateway</div>
+        </div>
+      </div>
+
+      <div class="step-card active">
+        <div class="step-num">2</div>
+        <div class="step-info">
+          <div class="step-title">Stage 2: Clarification Engine</div>
+          <div class="step-sub">Disambiguation Manager</div>
+        </div>
+      </div>
+
+      <div class="step-card active">
+        <div class="step-num">3</div>
+        <div class="step-info">
+          <div class="step-title">Stage 3: Better Query</div>
+          <div class="step-sub">Schema-aware SQL Generator</div>
+        </div>
+      </div>
+
+      <div class="step-card active">
+        <div class="step-num">4</div>
+        <div class="step-info">
+          <div class="step-title">Stage 4: Correct Query</div>
+          <div class="step-sub">Execution & Visualization</div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Workspace Grid: Left = Input & Clarification, Right = SQL Generator & Execution -->
+    <div class="workspace-grid">
+
+      <!-- Left Panel: Stage 1 & Stage 2 -->
+      <section class="panel">
+        <div class="panel-header">
+          <div class="panel-title">
+            <span class="panel-icon">💬</span> Stage 1 & 2: Prompt Gateway & Clarification
+          </div>
+          <span style="font-size:0.75rem; color:var(--text-muted); font-family:var(--font-code);">Dataset: 541,910
+            Rows</span>
+        </div>
+
+        <!-- Stage 1 Input Box -->
+        <div class="input-group">
+          <div class="prompt-wrapper">
+            <input type="text" id="promptInput" class="prompt-input"
+              placeholder="e.g. 'Show me top sales' or 'Which country has highest orders in 2011?'"
+              value="Show me top sales" />
+            <button id="btnSubmit" class="btn-submit-query" title="Analyze & Disambiguate">➔</button>
+          </div>
+
+          <!-- Benchmark Presets -->
+          <div class="presets-label">Interactive Benchmark Test Prompts:</div>
+          <div id="presetsContainer" class="presets-container"></div>
+        </div>
+
+        <!-- Ambiguity Warning Banner -->
+        <div id="ambiguityBanner" class="ambiguity-banner">
+          <div class="ambiguity-icon">⚠️</div>
+          <div class="ambiguity-content">
+            <h4>Ambiguity Detected (<span id="ambiguityCount">0</span> Issues Flagged)</h4>
+            <div id="ambiguityList"></div>
+          </div>
+        </div>
+
+        <!-- Stage 2: Interactive Clarification Controls Manager -->
+        <div style="border-top:1px solid var(--border-color); padding-top:1rem;">
+          <h4
+            style="font-size:0.9rem; font-weight:600; color:var(--color-primary); margin-bottom:0.75rem; display:flex; align-items:center; gap:0.5rem;">
+            <span>🤖</span> Clarification Engine Options (Disambiguation Manager)
+          </h4>
+          <div id="clarificationControls" class="clarification-section"></div>
+        </div>
+
+        <!-- Enriched Target Intent Box -->
+        <div class="enriched-box">
+          <div class="enriched-label">Stage 3 Intermediate Representation (Enriched Intent):</div>
+          <div id="enrichedTextDisplay" class="enriched-text">Calculate Total Revenue ($) grouped by Products for Full
+            Dataset...</div>
+        </div>
+      </section>
+
+      <!-- Right Panel: Stage 3 & Stage 4 (SQL Construction & Validation) -->
+      <section class="panel">
+        <div class="panel-header">
+          <div class="panel-title">
+            <span class="panel-icon">⚡</span> Stage 3 & 4: SQL Generator & Dry-Run Engine
+          </div>
+          <span
+            style="font-size:0.75rem; color:var(--color-primary); background:rgba(16,185,129,0.15); padding:0.2rem 0.6rem; border-radius:12px; font-weight:600;">
+            ✓ Syntax Pass
+          </span>
+        </div>
+
+        <!-- Generated SQL Display -->
+        <div class="sql-display-box">
+          <div class="sql-header">
+            <span>GEN_SQL_ANSI_ONLINE_RETAIL.sql</span>
+            <div class="sql-actions">
+              <button id="btnCopySQL" class="btn-icon">📋 Copy SQL</button>
+            </div>
+          </div>
+          <pre id="sqlCodeBox" class="sql-code">SELECT Description, SUM(Quantity * UnitPrice) ...</pre>
+        </div>
+
+        <!-- SQL Construction Logic Step-by-Step Explanation -->
+        <div
+          style="background:rgba(13,21,39,0.5); border:1px solid var(--border-color); border-radius:12px; padding:1rem;">
+          <h5
+            style="font-size:0.8rem; font-weight:600; color:var(--color-purple); margin-bottom:0.4rem; text-transform:uppercase; letter-spacing:0.05em;">
+            Query Construction Step-by-Step Logic:
+          </h5>
+          <ul id="sqlExplanationList"
+            style="font-size:0.8rem; color:var(--text-muted); padding-left:1.2rem; display:flex; flex-direction:column; gap:0.25rem;">
+          </ul>
+        </div>
+
+        <!-- Execution Stats Badges Bar -->
+        <div class="metrics-bar">
+          <div class="metric-card">
+            <span class="metric-label">Execution Latency</span>
+            <span id="latencyVal" class="metric-val pass">12.4 ms</span>
+          </div>
+          <div class="metric-card">
+            <span class="metric-label">Dataset Records</span>
+            <span id="recordsVal" class="metric-val cyan">541,910</span>
+          </div>
+          <div class="metric-card">
+            <span class="metric-label">Accuracy Rate</span>
+            <span id="accuracyVal" class="metric-val pass">100% (Pass)</span>
+          </div>
+          <div class="metric-card">
+            <span class="metric-label">Dry-Run Status</span>
+            <span class="metric-val pass">VALIDATED</span>
+          </div>
+        </div>
+
+      </section>
+
+    </div>
+
+    <!-- Stage 4 Explorer: Results Visualizations & Data Table -->
+    <section class="results-section">
+
+      <!-- KPI Summary Cards Row -->
+      <div class="kpi-row">
+        <div class="kpi-card">
+          <div class="kpi-icon-box green">💵</div>
+          <div class="kpi-details">
+            <span class="kpi-title">Total Revenue ($)</span>
+            <span id="kpiRevenue" class="kpi-value">$0.00</span>
+          </div>
+        </div>
+
+        <div class="kpi-card">
+          <div class="kpi-icon-box blue">📦</div>
+          <div class="kpi-details">
+            <span class="kpi-title">Total Units Sold</span>
+            <span id="kpiQuantity" class="kpi-value">0</span>
+          </div>
+        </div>
+
+        <div class="kpi-card">
+          <div class="kpi-icon-box purple">🧾</div>
+          <div class="kpi-details">
+            <span class="kpi-title">Distinct Orders</span>
+            <span id="kpiOrders" class="kpi-value">0</span>
+          </div>
+        </div>
+
+        <div class="kpi-card">
+          <div class="kpi-icon-box amber">📊</div>
+          <div class="kpi-details">
+            <span class="kpi-title">Avg Order Value</span>
+            <span id="kpiAvgValue" class="kpi-value">$0.00</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Chart and Data Table Grid -->
+      <div class="viz-grid">
+
+        <!-- Dynamic Visualization Chart -->
+        <div class="chart-card">
+          <div class="chart-header">
+            <span class="chart-title">📈 Execution Result Analytics Chart</span>
+          </div>
+          <div class="chart-container">
+            <canvas id="resultsChart"></canvas>
+          </div>
+        </div>
+
+        <!-- Searchable Paginated Data Table -->
+        <div class="table-card">
+          <div class="table-controls">
+            <span style="font-weight:600; font-size:0.95rem;">📋 Query Results Table</span>
+            <div style="display:flex; gap:0.5rem; align-items:center;">
+              <input type="text" id="searchInput" class="search-input" placeholder="🔍 Search entity..." />
+              <button id="btnExportCSV" class="btn-secondary" style="padding:0.4rem 0.75rem; font-size:0.8rem;">📥
+                Export CSV</button>
+            </div>
+          </div>
+
+          <div class="table-wrapper">
+            <table>
+              <thead>
+                <tr>
+                  <th>Entity Name / Key</th>
+                  <th>Revenue ($)</th>
+                  <th>Quantity</th>
+                  <th>Distinct Orders</th>
+                  <th>Avg Order ($)</th>
+                </tr>
+              </thead>
+              <tbody id="tableBody"></tbody>
+            </table>
+          </div>
+
+          <div class="table-pagination">
+            <span id="pageInfo">Page 1 of 1</span>
+            <div style="display:flex; gap:0.5rem;">
+              <button id="btnPrevPage" class="btn-secondary" style="padding:0.3rem 0.6rem; font-size:0.75rem;">◄
+                Prev</button>
+              <button id="btnNextPage" class="btn-secondary" style="padding:0.3rem 0.6rem; font-size:0.75rem;">Next
+                ►</button>
+            </div>
+          </div>
+        </div>
+
+      </div>
+
+    </section>
+
+  </main>
+
+  <!-- Modal Overlay (Architecture Diagram & Schema Dictionary) -->
+  <div id="modalOverlay" class="modal-overlay">
+    <div class="modal-content">
+      <div class="modal-header">
+        <div id="modalTitle" class="modal-title">Title</div>
+        <button id="btnCloseModal" class="close-btn">&times;</button>
+      </div>
+      <div id="modalBody"></div>
+    </div>
+  </div>
+
+  <!-- JS Modules -->
+  <script src="db_engine.js"></script>
+  <script src="clarification_engine.js"></script>
+  <script src="app.js"></script>
+</body>
+
+</html>
