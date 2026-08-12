@@ -1,0 +1,38 @@
+{
+  "annotations": { "list": [] },
+  "editable": true,
+  "fiscalYearStartMonth": 0,
+  "graphTooltip": 0,
+  "id": 1,
+  "links": [],
+  "liveNow": false,
+  "panels": [
+    {
+      "title": "QueryLens API Request Latency (p95)",
+      "type": "timeseries",
+      "targets": [
+        {
+          "expr": "histogram_quantile(0.95, sum(rate(http_request_duration_seconds_bucket[5m])) by (le))",
+          "legendFormat": "p95 latency"
+        }
+      ]
+    },
+    {
+      "title": "Total Ambiguity Disambiguations Processed",
+      "type": "stat",
+      "targets": [
+        {
+          "expr": "sum(http_requests_total{handler=\"/api/pipeline\"})",
+          "legendFormat": "Pipeline Executions"
+        }
+      ]
+    }
+  ],
+  "refresh": "5s",
+  "schemaVersion": 38,
+  "style": "dark",
+  "tags": ["querylens", "nl2sql"],
+  "time": { "from": "now-1h", "to": "now" },
+  "title": "QueryLens System Performance & Metrics",
+  "uid": "querylens_metrics"
+}

@@ -1,0 +1,30 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: querylens-frontend
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: querylens-frontend
+  template:
+    metadata:
+      labels:
+        app: querylens-frontend
+    spec:
+      containers:
+      - name: frontend
+        image: querylens-frontend:latest
+        ports:
+        - containerPort: 80
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: frontend-service
+spec:
+  selector:
+    app: querylens-frontend
+  ports:
+  - port: 80
+    targetPort: 80
