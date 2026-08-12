@@ -13,9 +13,8 @@ services:
       - REDIS_HOST=redis
       - REDIS_PORT=6379
       - ELASTICSEARCH_URL=http://elasticsearch:9200
-      - POSTGRES_URL=postgresql://querylens_user:querylens_pass@postgres:5432/querylens_db
+      - H2_DATABASE_MODE=in_memory
     depends_on:
-      - postgres
       - redis
       - elasticsearch
     restart: always
@@ -31,17 +30,8 @@ services:
       - backend
     restart: always
 
-  # 3. PostgreSQL Database Instance
-  postgres:
-    image: postgres:15-alpine
-    environment:
-      - POSTGRES_DB=querylens_db
-      - POSTGRES_USER=querylens_user
-      - POSTGRES_PASSWORD=querylens_pass
-    ports:
-      - "5432:5432"
-    volumes:
-      - postgres_data:/var/lib/postgresql/data
+  # 3. H2 Database Configuration
+  # H2 DB runs in-memory embedded in backend with startup creation & parameterized execution.
 
   # 4. Redis Session Cache
   redis:
@@ -78,5 +68,4 @@ services:
       - prometheus
 
 volumes:
-  postgres_data:
   es_data:

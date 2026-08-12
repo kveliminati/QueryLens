@@ -21,6 +21,7 @@ def test_health_check():
     data = response.json()
     assert data["status"] == "HEALTHY"
     assert "techStack" in data
+    assert data["techStack"]["database"] == "H2 Database Engine"
 
 def test_schema_metadata():
     response = client.get("/api/schema")

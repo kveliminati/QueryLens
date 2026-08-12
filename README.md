@@ -12,7 +12,7 @@
 | :--- | :--- | :--- |
 | **Frontend & APIs** | **React**<br>**Python FastAPI**<br>**WebSockets** | Modern Vite + React dark-mode glassmorphism UI, REST API Gateway endpoints, real-time `/ws/clarify` WebSocket stream. |
 | **Core Engine (ML & Logic)** | **OpenAI API (GPT-4)**<br>**LangChain**<br>**Hugging Face Transformers** | `app/llm_engine.py` (LangChain Intent Extraction & Schema-Aware SQL Constructor), `app/entity_search.py` (HF Transformers semantic entity search). |
-| **Data & Metadata** | **PostgreSQL**<br>**Elasticsearch**<br>**Redis** | `app/db_engine.py` (PostgreSQL / DuckDB engine executing queries on 541,910 records dataset), `app/elasticsearch_client.py` (Entity repo), `app/redis_client.py` (Session cache). |
+| **Data & Metadata** | **H2 Database**<br>**Elasticsearch**<br>**Redis** | `app/db_engine.py` (H2 Database Engine executing parameterized queries on 541,910 records dataset created & loaded at startup), `app/elasticsearch_client.py` (Entity repo), `app/redis_client.py` (Session cache). |
 | **Development & DevOps** | **Docker**<br>**Kubernetes**<br>**Prometheus / Grafana** | `docker-compose.yml`, `Dockerfile.backend`, `Dockerfile.frontend`, Kubernetes manifests in `k8s/`, Prometheus scraping (`/metrics`) & Grafana dashboards. |
 
 ---
@@ -43,7 +43,7 @@ Open [http://localhost:3000](http://localhost:3000) in your browser.
 
 ### Option 2: Docker Compose (Full Stack)
 
-To spin up all 7 microservices (FastAPI backend, React frontend, PostgreSQL, Redis, Elasticsearch, Prometheus, and Grafana) simultaneously:
+To spin up all microservices (FastAPI backend, React frontend, Redis, Elasticsearch, Prometheus, and Grafana) simultaneously:
 
 ```bash
 docker-compose up --build
@@ -63,7 +63,7 @@ Deploy to your Kubernetes cluster:
 
 ```bash
 kubectl apply -f k8s/configmap.yaml
-kubectl apply -f k8s/postgres-statefulset.yaml
+kubectl apply -f k8s/h2-deployment.yaml
 kubectl apply -f k8s/redis-deployment.yaml
 kubectl apply -f k8s/elasticsearch-deployment.yaml
 kubectl apply -f k8s/backend-deployment.yaml
@@ -88,5 +88,5 @@ python -m pytest backend/tests
 - **FR-01: Ambiguity Detection**: Flags vague metrics (Revenue vs Quantity vs Order Count), missing temporal scopes, and unmapped entities.
 - **FR-02: Clarification Generation**: Renders interactive disambiguation dropdowns for real-time user selection.
 - **FR-03: Context Enrichment**: Merges user choices into an enriched, refined intermediate prompt.
-- **FR-04: Schema-Aware SQL Generation**: Generates PostgreSQL-compliant SQL query with explanations and accuracy scoring.
-- **FR-05: Dry Run Syntax Validation & Execution**: Performs syntax EXPLAIN checks, executes queries over 541,910 records, calculates KPIs, and visualizes results with interactive Chart.js charts and data tables.
+- **FR-04: Schema-Aware SQL Generation**: Generates H2 DB compliant parameterized SQL queries with explanations and accuracy scoring.
+- **FR-05: Dry Run Syntax Validation & Execution**: Performs syntax EXPLAIN checks, executes parameterized queries over 541,910 records, calculates KPIs, and visualizes results with interactive Chart.js charts and data tables.

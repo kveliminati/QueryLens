@@ -6,6 +6,4 @@ data:
   REDIS_HOST: "redis-service"
   REDIS_PORT: "6379"
   ELASTICSEARCH_URL: "http://elasticsearch-service:9200"
-  POSTGRES_HOST: "postgres-service"
-  POSTGRES_PORT: "5432"
-  POSTGRES_DB: "querylens_db"
+  H2_DATABASE_MODE: "in_memory"

@@ -179,7 +179,8 @@ class ClarificationEngineCore:
     def generate_sql(self, refined_intent: Dict[str, Any]) -> Dict[str, Any]:
         """
         FR-04 & Stage 3: Structured Query Constructor & Schema-Aware SQL Generator
-        Generates validated PostgreSQL-compliant SQL query from structured intent.
+        Generates validated H2 DB compliant parameterized SQL query from structured intent.
+        Values are passed via parameter placeholders (?) without hardcoded values in SQL strings.
         """
         intent = refined_intent.get("structuredIntent", {})
         metric = intent.get("metric", "revenue")
@@ -200,28 +201,32 @@ class ClarificationEngineCore:
             order_col = "total_orders"
 
         # Build Group By column expression
-        group_col = f'"{group_by.strip()}"' if group_by in ["InvoiceNo", "StockCode", "Description", "CustomerID", "Country", "YearMonth"] else f'"{group_by}"'
-        if group_by == "description":
-            group_col = '"Description"'
-        elif group_by == "customerID":
+        group_col = '"Description"'
+        if group_by == "customerID":
             group_col = '"CustomerID"'
         elif group_by == "country":
             group_col = '"Country"'
         elif group_by == "yearMonth":
             group_col = '"YearMonth"'
 
-        # Build Where Clause filters
+        # Build Where Clause filters with parameterized placeholders (?)
         where_clauses = []
+        params = []
+
         if filter_cancel == "EXCLUDE":
-            where_clauses.append('"IsCancel" = 0 AND "Quantity" > 0')
+            where_clauses.append('"IsCancel" = ? AND "Quantity" > ?')
+            params.extend([0, 0])
         elif filter_cancel == "ONLY":
-            where_clauses.append('"IsCancel" = 1')
+            where_clauses.append('"IsCancel" = ?')
+            params.append(1)
 
         if group_by == "customerID":
-            where_clauses.append('"CustomerID" IS NOT NULL AND "CustomerID" != \'\'')
+            where_clauses.append('"CustomerID" IS NOT NULL AND "CustomerID" != ?')
+            params.append('')
 
-        if timeframe in ["2010", "2011"]:
-            where_clauses.append(f'"Year" = {timeframe}')
+        if str(timeframe).isdigit():
+            where_clauses.append('"Year" = ?')
+            params.append(int(timeframe))
 
         where_str = ("\nWHERE " + "\n  AND ".join(where_clauses)) if where_clauses else ""
 
@@ -231,20 +236,24 @@ class ClarificationEngineCore:
 FROM online_retail{where_str}
 GROUP BY {group_col}
 ORDER BY {order_col} DESC
-LIMIT {limit};"""
+LIMIT ?;"""
+        params.append(int(limit))
 
         explanations = [
+            f"Target Database: H2 Database Engine.",
             f"Selected grouping entity {group_col} and metric aggregated as {order_col}.",
-            f"Applied schema filter criteria: {filter_cancel} cancellations.",
-            f"Temporal scope set to {timeframe}.",
-            f"Ordered results descending by {order_col} with top {limit} cut-off."
+            f"Applied schema filter criteria via bound parameters ({filter_cancel} cancellations).",
+            f"Temporal scope set via parameter to {timeframe}.",
+            f"Ordered results descending by {order_col} with parameterized LIMIT cut-off."
         ]
 
         return {
             "sql": sql,
+            "params": params,
             "explanations": explanations,
             "accuracyScore": 98.4
         }
+
 
 
 # Singleton instance

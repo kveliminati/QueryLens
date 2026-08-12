@@ -53,7 +53,7 @@ export default function ArchitectureModal({ isOpen, onClose }) {
                 <Database size={14} /> 3. Data & Metadata
               </h3>
               <p style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>
-                PostgreSQL target database engine, Elasticsearch for entity mapping, and Redis for high-speed session state caching.
+                H2 target database engine, Elasticsearch for entity mapping, and Redis for high-speed session state caching.
               </p>
             </div>
 

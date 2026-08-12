@@ -1,0 +1,38 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: h2-database
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: h2-database
+  template:
+    metadata:
+      labels:
+        app: h2-database
+    spec:
+      containers:
+      - name: h2-database
+        image: oscarcarballal/h2:latest
+        ports:
+        - containerPort: 8082
+        - containerPort: 9092
+        env:
+        - name: H2_OPTIONS
+          value: "-web -webAllowOthers -tcp -tcpAllowOthers"
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: h2-service
+spec:
+  selector:
+    app: h2-database
+  ports:
+  - name: web
+    port: 8082
+    targetPort: 8082
+  - name: tcp
+    port: 9092
+    targetPort: 9092

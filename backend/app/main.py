@@ -25,10 +25,19 @@ try:
 except ImportError:
     HAS_PROMETHEUS = False
 
+from contextlib import asynccontextmanager
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """Application Startup Lifecycle: Creates database schema and loads data into H2 DB."""
+    db_engine.initialize_on_startup()
+    yield
+
 app = FastAPI(
     title="QueryLens NL2SQL Clarification Engine API",
     description="Python FastAPI REST & WebSockets Service implementing the Clarification Engine Deep Architecture",
-    version="2.0.0"
+    version="2.0.0",
+    lifespan=lifespan
 )
 
 # Enable CORS for React Frontend
@@ -61,6 +70,7 @@ class SQLGenerateRequest(BaseModel):
 
 class SQLExecuteRequest(BaseModel):
     sql: str
+    params: Optional[Any] = None
 
 
 @app.get("/api/health")
@@ -73,7 +83,7 @@ def get_health():
             "apiFramework": "Python FastAPI",
             "llmCore": "OpenAI GPT-4 & LangChain",
             "entitySearch": "Hugging Face Transformers",
-            "database": "PostgreSQL Engine (DuckDB SQL)",
+            "database": "H2 Database Engine",
             "cache": "Redis Cache",
             "search": "Elasticsearch Repository",
             "metrics": "Prometheus & Grafana"
@@ -107,7 +117,7 @@ def generate_sql(req: SQLGenerateRequest):
 @app.post("/api/execute-sql")
 def execute_sql(req: SQLExecuteRequest):
     """FR-05: Dry Run Syntax Check & Database Execution"""
-    return db_engine.execute_query(req.sql)
+    return db_engine.execute_query(req.sql, req.params)
 
 @app.post("/api/pipeline")
 def full_pipeline(req: ClarifyRequest):
@@ -116,7 +126,7 @@ def full_pipeline(req: ClarifyRequest):
     selections = req.selections or ambiguity["defaultSuggestions"]
     refined = clarification_engine.generate_refined_intent(req.prompt, selections)
     sql_data = clarification_engine.generate_sql(refined)
-    exec_result = db_engine.execute_query(sql_data["sql"])
+    exec_result = db_engine.execute_query(sql_data["sql"], sql_data.get("params"))
 
     return {
         "ambiguity": ambiguity,
