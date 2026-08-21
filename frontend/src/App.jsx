@@ -1,264 +1,217 @@
-import React, { useState, useEffect, useRef } from 'react';
-import Header from './components/Header';
-import AmbiguityCard from './components/AmbiguityCard';
-import SQLExplorer from './components/SQLExplorer';
-import ResultsVisualizer from './components/ResultsVisualizer';
-import DataTable from './components/DataTable';
-import ArchitectureModal from './components/ArchitectureModal';
-import SchemaModal from './components/SchemaModal';
-import { Send, Zap, Play, CheckCircle2 } from 'lucide-react';
-import axios from 'axios';
+import { useState } from "react";
+import QueryInput from "./components/QueryInput";
+import ClarificationPrompt from "./components/ClarificationPrompt";
+import ResultsTable from "./components/ResultsTable";
+import ResultsChart from "./components/ResultsChart";
+import SqlDisclosure from "./components/SqlDisclosure";
+import ErrorBoundary from "./components/ErrorBoundary";
+import { submitQuery, submitClarification } from "./api/client";
+import "./App.css";
 
-const BENCHMARK_PRESETS = [
-  { text: "Show me top sales", category: "Vague Metric & Scope" },
-  { text: "Which customers bought the most?", category: "Entity Aggregation" },
-  { text: "Total revenue in 2011 by country", category: "Country Breakdown" },
-  { text: "Top 5 best selling products", category: "Volume vs Revenue" },
-  { text: "Cancelled orders summary", category: "Cancellation Scope" },
-  { text: "Monthly revenue trend", category: "Time Series" }
-];
+// Application states
+const STATE = {
+  IDLE: "idle",
+  LOADING: "loading",
+  CLARIFICATION: "clarification",
+  RESULTS: "results",
+  ERROR: "error",
+};
 
 export default function App() {
-  const [prompt, setPrompt] = useState('Show me top sales');
-  const [wsConnected, setWsConnected] = useState(false);
-  const [isArchModalOpen, setIsArchModalOpen] = useState(false);
-  const [isSchemaModalOpen, setIsSchemaModalOpen] = useState(false);
+  const [appState, setAppState] = useState(STATE.IDLE);
+  const [currentQuery, setCurrentQuery] = useState("");
+  const [result, setResult] = useState(null);
+  const [error, setError] = useState(null);
 
-  // Engine state
-  const [ambiguityData, setAmbiguityData] = useState(null);
-  const [selections, setSelections] = useState({
-    metric: 'revenue',
-    groupBy: 'description',
-    timeframe: 'ALL',
-    filterCancel: 'EXCLUDE',
-    limit: 10
-  });
-  const [refinedIntent, setRefinedIntent] = useState(null);
-  const [sqlData, setSqlData] = useState(null);
-  const [queryResult, setQueryResult] = useState(null);
-  const [schemaData, setSchemaData] = useState(null);
+  const handleQuerySubmit = async (query) => {
+    setCurrentQuery(query);
+    setAppState(STATE.LOADING);
+    setError(null);
+    setResult(null);
 
-  const wsRef = useRef(null);
-
-  // Initialize WebSocket connection & load schema
-  useEffect(() => {
-    fetchSchema();
-    connectWebSocket();
-
-    return () => {
-      if (wsRef.current) wsRef.current.close();
-    };
-  }, []);
-
-  const connectWebSocket = () => {
     try {
-      const wsProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-      const wsUrl = `${wsProtocol}//${window.location.hostname}:8000/ws/clarify`;
-      const ws = new WebSocket(wsUrl);
+      const response = await submitQuery(query);
 
-      ws.onopen = () => {
-        setWsConnected(true);
-        console.log('[WebSocket] Connected to QueryLens FastAPI WS');
-      };
-
-      ws.onmessage = (event) => {
-        try {
-          const data = JSON.parse(event.data);
-          if (data.type === 'AMBIGUITY_DETECTED') {
-            setAmbiguityData(data.data);
-            if (data.data?.defaultSuggestions) {
-              setSelections(data.data.defaultSuggestions);
-            }
-          } else if (data.type === 'PIPELINE_COMPLETE') {
-            setRefinedIntent(data.refinedIntent);
-            setSqlData(data.sqlData);
-            setQueryResult(data.execution);
-          }
-        } catch (err) {
-          console.error('[WebSocket] Parsing error:', err);
-        }
-      };
-
-      ws.onclose = () => {
-        setWsConnected(false);
-        console.log('[WebSocket] Disconnected, using REST API fallback');
-      };
-
-      ws.onerror = () => {
-        setWsConnected(false);
-      };
-
-      wsRef.current = ws;
-    } catch (e) {
-      setWsConnected(false);
-    }
-  };
-
-  const fetchSchema = async () => {
-    try {
-      const res = await axios.get('/api/schema');
-      setSchemaData(res.data);
-    } catch (e) {
-      // Fallback schema data
-      setSchemaData({
-        tableName: 'online_retail',
-        totalRecords: 541910,
-        columns: [
-          { name: 'InvoiceNo', type: 'VARCHAR(20)', description: 'Invoice number' },
-          { name: 'StockCode', type: 'VARCHAR(20)', description: 'Product code' },
-          { name: 'Description', type: 'VARCHAR(255)', description: 'Product description' },
-          { name: 'Quantity', type: 'INTEGER', description: 'Quantity of items' },
-          { name: 'InvoiceDate', type: 'TIMESTAMP', description: 'Transaction date' },
-          { name: 'UnitPrice', type: 'NUMERIC(10,2)', description: 'Unit price in GBP' },
-          { name: 'CustomerID', type: 'VARCHAR(20)', description: 'Customer ID' },
-          { name: 'Country', type: 'VARCHAR(100)', description: 'Customer location' }
-        ],
-        metrics: {
-          revenue: 'SUM(Quantity * UnitPrice)',
-          quantity: 'SUM(Quantity)',
-          orders: 'COUNT(DISTINCT InvoiceNo)',
-          avgOrderValue: 'SUM(Quantity * UnitPrice) / COUNT(DISTINCT InvoiceNo)'
-        }
-      });
-    }
-  };
-
-  // Execute NL2SQL pipeline
-  const runPipeline = async (targetPrompt = prompt, customSelections = selections) => {
-    if (wsConnected && wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
-      // Stream via WebSocket
-      wsRef.current.send(JSON.stringify({
-        action: 'CLARIFY_SELECTIONS',
-        prompt: targetPrompt,
-        selections: customSelections
-      }));
-    } else {
-      // REST API fallback
-      try {
-        const res = await axios.post('/api/pipeline', {
-          prompt: targetPrompt,
-          selections: customSelections
-        });
-        setAmbiguityData(res.data.ambiguity);
-        setRefinedIntent(res.data.refinedIntent);
-        setSqlData(res.data.sqlData);
-        setQueryResult(res.data.execution);
-      } catch (err) {
-        console.error('REST Pipeline error:', err);
+      if (response.status === "clarification_needed") {
+        setResult(response);
+        setAppState(STATE.CLARIFICATION);
+      } else if (response.status === "ok") {
+        setResult(response);
+        setAppState(STATE.RESULTS);
+      } else if (response.status === "error") {
+        setError(response.error_message || "An error occurred");
+        setAppState(STATE.ERROR);
       }
+    } catch (err) {
+      setError(err.message || "Failed to connect to the server");
+      setAppState(STATE.ERROR);
     }
   };
 
-  // Initial load auto-trigger
-  useEffect(() => {
-    runPipeline('Show me top sales', selections);
-  }, []);
+  const handleClarification = async (choice) => {
+    setAppState(STATE.LOADING);
+    setError(null);
 
-  const handleSelectionChange = (key, value) => {
-    const updated = { ...selections, [key]: value };
-    setSelections(updated);
-    runPipeline(prompt, updated);
+    try {
+      const response = await submitClarification(
+        result.session_id,
+        currentQuery,
+        choice
+      );
+
+      if (response.status === "ok") {
+        setResult(response);
+        setAppState(STATE.RESULTS);
+      } else if (response.status === "error") {
+        setError(response.error_message || "An error occurred");
+        setAppState(STATE.ERROR);
+      }
+    } catch (err) {
+      setError(err.message || "Failed to connect to the server");
+      setAppState(STATE.ERROR);
+    }
   };
 
-  const handlePresetClick = (presetText) => {
-    setPrompt(presetText);
-    let defaultSel = { ...selections };
-    if (presetText.includes('customers')) defaultSel.groupBy = 'customerID';
-    else if (presetText.includes('country')) defaultSel.groupBy = 'country';
-    else if (presetText.includes('products')) defaultSel.groupBy = 'description';
-    else if (presetText.includes('Monthly')) defaultSel.groupBy = 'yearMonth';
-
-    if (presetText.includes('2011')) defaultSel.timeframe = '2011';
-    else if (presetText.includes('2010')) defaultSel.timeframe = '2010';
-
-    if (presetText.includes('Cancelled')) defaultSel.filterCancel = 'ONLY';
-
-    setSelections(defaultSel);
-    runPipeline(presetText, defaultSel);
+  const handleReset = () => {
+    setAppState(STATE.IDLE);
+    setCurrentQuery("");
+    setResult(null);
+    setError(null);
   };
 
   return (
-    <div className="app-root">
-      <Header 
-        wsConnected={wsConnected} 
-        onOpenArchModal={() => setIsArchModalOpen(true)}
-        onOpenSchemaModal={() => setIsSchemaModalOpen(true)}
-      />
+    <div className="app">
+      {/* Animated background */}
+      <div className="bg-grid" />
+      <div className="bg-glow bg-glow-1" />
+      <div className="bg-glow bg-glow-2" />
+      <div className="bg-glow bg-glow-3" />
 
-      <main className="main-container">
-        {/* Stage 1: User Ambiguous Question Input Gateway */}
-        <section className="glass-panel prompt-section">
-          <div className="section-title">
-            <span className="section-num">Stage 1</span>
-            User Ambiguous Question (Input Gateway & API Endpoint)
+      <div className="app-content">
+        {/* Header */}
+        <header className="app-header">
+          <div className="logo">
+            <div className="logo-icon">
+              <svg viewBox="0 0 32 32" fill="none">
+                <rect width="32" height="32" rx="8" fill="url(#logo-grad)" />
+                <path
+                  d="M8 12h16M8 16h12M8 20h8"
+                  stroke="white"
+                  strokeWidth="2"
+                  strokeLinecap="round"
+                />
+                <circle cx="24" cy="20" r="4" stroke="white" strokeWidth="2" />
+                <defs>
+                  <linearGradient id="logo-grad" x1="0" y1="0" x2="32" y2="32">
+                    <stop stopColor="#8B5CF6" />
+                    <stop offset="1" stopColor="#06B6D4" />
+                  </linearGradient>
+                </defs>
+              </svg>
+            </div>
+            <div className="logo-text">
+              <h1>QueryLens</h1>
+              <span className="logo-subtitle">Natural Language to SQL</span>
+            </div>
           </div>
 
-          <div className="prompt-input-wrapper">
-            <input 
-              type="text" 
-              className="prompt-input"
-              value={prompt}
-              onChange={(e) => setPrompt(e.target.value)}
-              onKeyDown={(e) => e.key === 'Enter' && runPipeline(prompt, selections)}
-              placeholder="Ask a natural language query e.g., 'Show me top sales'..."
-            />
-            <button className="btn-primary" onClick={() => runPipeline(prompt, selections)}>
-              <Send size={16} /> Analyze Query
+          {(appState === STATE.RESULTS ||
+            appState === STATE.CLARIFICATION ||
+            appState === STATE.ERROR) && (
+            <button className="new-query-btn" onClick={handleReset}>
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <polyline points="1 4 1 10 7 10" />
+                <path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10" />
+              </svg>
+              New Query
             </button>
-          </div>
+          )}
+        </header>
 
-          <div className="presets-grid">
-            {BENCHMARK_PRESETS.map((item, idx) => (
-              <div 
-                key={idx} 
-                className="preset-chip"
-                onClick={() => handlePresetClick(item.text)}
-              >
-                ⚡ {item.text}
+        {/* Main content area */}
+        <main className="main-area">
+          {/* Query input — always visible */}
+          <QueryInput
+            onSubmit={handleQuerySubmit}
+            isLoading={appState === STATE.LOADING}
+          />
+
+          {/* Loading state */}
+          {appState === STATE.LOADING && (
+            <div className="loading-container animate-in">
+              <div className="loading-pulse">
+                <div className="pulse-ring" />
+                <div className="pulse-ring" style={{ animationDelay: "0.3s" }} />
+                <div className="pulse-ring" style={{ animationDelay: "0.6s" }} />
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="loading-icon">
+                  <circle cx="12" cy="12" r="10" />
+                  <polyline points="12 6 12 12 16 14" />
+                </svg>
               </div>
-            ))}
-          </div>
-        </section>
+              <p className="loading-text">Analyzing your query...</p>
+              <p className="loading-subtext">Detecting ambiguity and generating SQL</p>
+            </div>
+          )}
 
-        {/* Stage 2 & 3: Clarification Engine Core & SQL Generation Grid */}
-        <section className="pipeline-grid">
-          <AmbiguityCard 
-            ambiguityData={ambiguityData}
-            selections={selections}
-            onSelectionChange={handleSelectionChange}
-            refinedIntent={refinedIntent}
-          />
+          {/* Clarification prompt */}
+          {appState === STATE.CLARIFICATION && result && (
+            <ClarificationPrompt
+              question={result.clarifying_question}
+              options={result.options}
+              onSelect={handleClarification}
+              isLoading={false}
+            />
+          )}
 
-          <SQLExplorer 
-            sqlData={sqlData}
-            latencyMs={queryResult?.latencyMs}
-          />
-        </section>
+          {/* Results */}
+          {appState === STATE.RESULTS && result && (
+            <ErrorBoundary onReset={handleReset}>
+              <div className="results-area">
+                <ResultsChart
+                  chartSuggestion={result.chart_suggestion}
+                  columns={result.columns}
+                  rows={result.rows}
+                  xColumn={result.x_column}
+                  yColumns={result.y_columns}
+                />
 
-        {/* Stage 4: Results Processor & Visualizer */}
-        <section style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
-          <ResultsVisualizer 
-            kpis={queryResult?.kpis}
-            queryResult={queryResult}
-          />
+                <ResultsTable
+                  columns={result.columns}
+                  rows={result.rows}
+                />
 
-          <DataTable 
-            queryResult={queryResult}
-          />
-        </section>
-      </main>
+                <SqlDisclosure
+                  sql={result.sql}
+                  explanation={result.explanation}
+                />
+              </div>
+            </ErrorBoundary>
+          )}
 
-      {/* Modals */}
-      <ArchitectureModal 
-        isOpen={isArchModalOpen} 
-        onClose={() => setIsArchModalOpen(false)} 
-      />
+          {/* Error state */}
+          {appState === STATE.ERROR && (
+            <div className="error-container animate-in">
+              <div className="error-icon">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <circle cx="12" cy="12" r="10" />
+                  <line x1="15" y1="9" x2="9" y2="15" />
+                  <line x1="9" y1="9" x2="15" y2="15" />
+                </svg>
+              </div>
+              <h3>Something went wrong</h3>
+              <p>{error}</p>
+              <button className="retry-btn" onClick={() => handleQuerySubmit(currentQuery)}>
+                Try Again
+              </button>
+            </div>
+          )}
+        </main>
 
-      <SchemaModal 
-        isOpen={isSchemaModalOpen} 
-        onClose={() => setIsSchemaModalOpen(false)}
-        schemaData={schemaData}
-      />
+        {/* Footer */}
+        <footer className="app-footer">
+          <p>QueryLens v1.0 — Powered by Claude AI &amp; PostgreSQL</p>
+        </footer>
+      </div>
     </div>
   );
 }

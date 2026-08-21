@@ -1,9 +1,0 @@
-apiVersion: v1
-kind: ConfigMap
-metadata:
-  name: querylens-config
-data:
-  REDIS_HOST: "redis-service"
-  REDIS_PORT: "6379"
-  ELASTICSEARCH_URL: "http://elasticsearch-service:9200"
-  H2_DATABASE_MODE: "in_memory"

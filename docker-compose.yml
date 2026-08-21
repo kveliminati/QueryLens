@@ -1,71 +1,57 @@
-version: '3.8'
-
 services:
-  # 1. FastAPI Backend API & WebSocket Server
+  # ── PostgreSQL Database ──────────────────────────────────
+  db:
+    image: postgres:16-alpine
+    container_name: querylens-db
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-querylens}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-querylens_secret}
+      POSTGRES_DB: ${POSTGRES_DB:-querylens}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./db/init.sql:/docker-entrypoint-initdb.d/01_init.sql
+      - ./data.csv:/docker-entrypoint-initdb.d/data.csv
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U querylens"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  # ── FastAPI Backend ──────────────────────────────────────
   backend:
     build:
-      context: .
-      dockerfile: Dockerfile.backend
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: querylens-backend
+    env_file:
+      - .env
+    environment:
+      DATABASE_URL: postgresql+asyncpg://readonly_user:readonly_pass@db:5432/querylens
     ports:
       - "8000:8000"
-    environment:
-      - OPENAI_API_KEY=${OPENAI_API_KEY}
-      - REDIS_HOST=redis
-      - REDIS_PORT=6379
-      - ELASTICSEARCH_URL=http://elasticsearch:9200
-      - H2_DATABASE_MODE=in_memory
     depends_on:
-      - redis
-      - elasticsearch
-    restart: always
+      db:
+        condition: service_healthy
+    volumes:
+      - ./backend:/app
+    restart: unless-stopped
 
-  # 2. React Frontend Web Application (Nginx)
+  # ── React Frontend ──────────────────────────────────────
   frontend:
     build:
-      context: .
-      dockerfile: Dockerfile.frontend
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: querylens-frontend
     ports:
-      - "3000:80"
+      - "5173:5173"
     depends_on:
       - backend
-    restart: always
-
-  # 3. H2 Database Configuration
-  # H2 DB runs in-memory embedded in backend with startup creation & parameterized execution.
-
-  # 4. Redis Session Cache
-  redis:
-    image: redis:7-alpine
-    ports:
-      - "6379:6379"
-
-  # 5. Elasticsearch Entity Repository
-  elasticsearch:
-    image: elasticsearch:8.11.0
-    environment:
-      - discovery.type=single-node
-      - xpack.security.enabled=false
-      - "ES_JAVA_OPTS=-Xms512m -Xmx512m"
-    ports:
-      - "9200:9200"
     volumes:
-      - es_data:/usr/share/elasticsearch/data
-
-  # 6. Prometheus System Monitoring
-  prometheus:
-    image: prom/prometheus:latest
-    ports:
-      - "9090:9090"
-    volumes:
-      - ./prometheus.yml:/etc/prometheus/prometheus.yml
-
-  # 7. Grafana Metrics Visualization Dashboard
-  grafana:
-    image: grafana/grafana:latest
-    ports:
-      - "3001:3000"
-    depends_on:
-      - prometheus
+      - ./frontend:/app
+      - /app/node_modules
+    restart: unless-stopped
 
 volumes:
-  es_data:
+  postgres_data:
