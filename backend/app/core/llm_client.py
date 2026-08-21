@@ -18,13 +18,15 @@ def _get_client() -> OpenAI:
     """Return or create the OpenAI client singleton pointing at OpenRouter."""
     global _client
     if _client is None:
-        api_key = os.getenv("OPENROUTER_API_KEY")
-        base_url = "https://openrouter.ai/api/v1"
+        api_key = settings.openrouter_api_key or os.getenv("OPENROUTER_API_KEY", "")
+        base_url = settings.openrouter_base_url or os.getenv(
+            "OPENROUTER_BASE_URL", "https://openrouter.ai/api/v1"
+        )
         if not api_key:
             logger.warning("OPENROUTER_API_KEY is not set in environment variables or settings.")
         _client = OpenAI(
             base_url=base_url,
-            api_key=api_key,
+            api_key=api_key or "missing_key",
         )
     return _client
 

@@ -4,6 +4,11 @@ from pydantic_settings import BaseSettings
 from pydantic import Field
 
 
+from pathlib import Path
+
+BASE_DIR = Path(__file__).resolve().parent.parent.parent
+
+
 class Settings(BaseSettings):
     """Application settings, read from .env or environment variables."""
 
@@ -25,7 +30,7 @@ class Settings(BaseSettings):
     query_timeout_seconds: int = Field(default=5, alias="QUERY_TIMEOUT_SECONDS")
 
     model_config = {
-        "env_file": ".env",
+        "env_file": (".env", str(BASE_DIR / ".env"), str(BASE_DIR.parent / ".env")),
         "env_file_encoding": "utf-8",
         "extra": "ignore",
     }
